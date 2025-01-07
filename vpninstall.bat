@@ -44,23 +44,29 @@ set PACKAGE_NAME=VPN
 set RESOURCE_NAME=VPN
 set DOWNLOAD_API_URL=https://store.swiftpeakhosting.co.uk/api/v1/licenses/public/download
 
-:: Send API Request and Capture Response
+:: Send API Request and Save Response
 echo [INFO] Connecting to API...
 curl -s -X POST %DOWNLOAD_API_URL% -H "Content-Type: application/json" -d "{ \"license\": \"%LICENSE_KEY%\", \"packages\": \"%PACKAGE_NAME%\", \"resource_name\": \"%RESOURCE_NAME%\" }" > api_response.json
 
-:: Validate Response
+:: Validate Response File
 if not exist api_response.json (
     echo [ERROR] Failed to connect to the API.
     exit /b
 )
 
-:: Read API Response
+:: Extract Download URL
 set DOWNLOAD_URL=
-for /f "tokens=2 delims=:," %%A in ('findstr "download_url" api_response.json') do set DOWNLOAD_URL=%%A
+for /f "tokens=*" %%A in ('type api_response.json ^| findstr "download_url"') do (
+    set "DOWNLOAD_URL=%%A"
+)
+
+:: Clean Up the Download URL
+set DOWNLOAD_URL=%DOWNLOAD_URL:*"download_url":"=%
+set DOWNLOAD_URL=%DOWNLOAD_URL:","success":true}=%
 set DOWNLOAD_URL=%DOWNLOAD_URL:"=%
 set DOWNLOAD_URL=%DOWNLOAD_URL: }=%
 
-:: Check if Download URL is valid
+:: Check if Download URL is Valid
 if "%DOWNLOAD_URL%"=="" (
     echo [ERROR] Failed to retrieve download URL from the API response.
     echo [DEBUG] API Response:
