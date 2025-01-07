@@ -1,4 +1,4 @@
-@echo off
+@echo on
 setlocal EnableDelayedExpansion
 
 :: Enable debug mode (set to 1 for debug messages)
