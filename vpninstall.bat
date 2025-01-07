@@ -54,17 +54,16 @@ if not exist api_response.json (
     exit /b
 )
 
-:: Extract Download URL
+:: Extract Download URL (NO PIPES USED HERE)
 set DOWNLOAD_URL=
-for /f "tokens=*" %%A in ('type api_response.json ^| findstr "download_url"') do (
-    set "DOWNLOAD_URL=%%A"
+for /f "delims=" %%A in (api_response.json) do (
+    echo %%A | findstr "download_url" >nul && set "DOWNLOAD_URL=%%A"
 )
 
 :: Clean Up the Download URL
 set DOWNLOAD_URL=%DOWNLOAD_URL:*"download_url":"=%
 set DOWNLOAD_URL=%DOWNLOAD_URL:","success":true}=%
 set DOWNLOAD_URL=%DOWNLOAD_URL:"=%
-set DOWNLOAD_URL=%DOWNLOAD_URL: }=%
 
 :: Check if Download URL is Valid
 if "%DOWNLOAD_URL%"=="" (
