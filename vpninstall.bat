@@ -1,120 +1,97 @@
 @echo off
-setlocal EnableDelayedExpansion
-
-:: Enable debug mode (set DEBUG=1 for verbose output)
-set DEBUG=1
-
-:: Debug function
-if %DEBUG%==1 (
-    echo [DEBUG] Debug mode enabled.
-    @echo on
-)
-
-:: Functions for output
-:info
-echo [INFO] %*
-goto :eof
-
-:warning
-echo [WARNING] %*
-goto :eof
-
-:error
-echo [ERROR] %*
-exit /b 1
-goto :eof
+setlocal enabledelayedexpansion
 
 :: Welcome Message
-call :info ======================================
-call :info |||      Swift Peak Hosting LTD     |||
-call :info ======================================
+echo ======================================
+echo |||      Swift Peak Hosting LTD     |||
+echo ======================================
 
 :: Check CURL
-call :info Checking for CURL installation...
+echo [INFO] Checking for CURL installation...
 where curl >nul 2>nul
 if %errorlevel% neq 0 (
-    call :error CURL is not installed. Please install CURL and try again.
+    echo [ERROR] CURL is not installed. Please install CURL and try again.
+    exit /b
 )
-
-call :info CURL is installed.
+echo [INFO] CURL is installed.
 
 :: Prompt for License Key
 set /p LICENSE_KEY=Please enter your license key: 
 if "%LICENSE_KEY%"=="" (
-    call :error License key cannot be empty!
+    echo [ERROR] License key cannot be empty!
+    exit /b
 )
 
 :: Prompt for Installation Directory
 set /p TARGET_DIR=Please enter the installation directory path: 
 if "%TARGET_DIR%"=="" (
-    call :error Target directory cannot be empty!
+    echo [ERROR] Target directory cannot be empty!
+    exit /b
 )
 
 :: Create Directory if it doesn't exist
 if not exist "%TARGET_DIR%" (
-    call :info Creating directory: %TARGET_DIR%
+    echo [INFO] Creating directory: %TARGET_DIR%
     mkdir "%TARGET_DIR%"
     if %errorlevel% neq 0 (
-        call :error Failed to create directory. Check permissions.
+        echo [ERROR] Failed to create directory. Check permissions.
+        exit /b
     )
 )
 
-:: Define Variables
+:: Variables
 set PACKAGE_NAME=VPN
 set RESOURCE_NAME=VPN
 set DOWNLOAD_API_URL=https://store.swiftpeakhosting.co.uk/api/v1/licenses/public/download
 
-:: Debug variables
-if %DEBUG%==1 (
-    echo [DEBUG] License Key: %LICENSE_KEY%
-    echo [DEBUG] Target Directory: %TARGET_DIR%
+:: Send API Request and Capture Response
+echo [INFO] Connecting to API...
+curl -s -X POST %DOWNLOAD_API_URL% -H "Content-Type: application/json" -d "{ \"license\": \"%LICENSE_KEY%\", \"packages\": \"%PACKAGE_NAME%\", \"resource_name\": \"%RESOURCE_NAME%\" }" > api_response.json
+
+:: Validate Response
+if not exist api_response.json (
+    echo [ERROR] Failed to connect to the API.
+    exit /b
 )
 
-:: Call API and Fetch Download URL
-call :info Connecting to API...
+:: Read API Response
+set DOWNLOAD_URL=
+for /f "tokens=2 delims=:," %%A in ('findstr "download_url" api_response.json') do set DOWNLOAD_URL=%%A
+set DOWNLOAD_URL=%DOWNLOAD_URL:"=%
+set DOWNLOAD_URL=%DOWNLOAD_URL: }=%
 
-set PAYLOAD={"license":"%LICENSE_KEY%","packages":"%PACKAGE_NAME%","resource_name":"%RESOURCE_NAME%"}
-
-:: Send API Request
-for /f "delims=" %%A in ('curl -s -X POST %DOWNLOAD_API_URL% -H "Content-Type: application/json" -d "{ \"license\": \"%LICENSE_KEY%\", \"packages\": \"%PACKAGE_NAME%\", \"resource_name\": \"%RESOURCE_NAME%\" }"') do (
-    set RESPONSE=%%A
-)
-
-:: Debug Response
-if %DEBUG%==1 echo [DEBUG] API Response: !RESPONSE!
-
-:: Parse Download URL from Response
-for /f "tokens=2 delims=:," %%A in ('echo !RESPONSE! ^| findstr /C:"download_url"') do set DOWNLOAD_URL=%%~A
-set DOWNLOAD_URL=!DOWNLOAD_URL:"=!
-set DOWNLOAD_URL=!DOWNLOAD_URL: }=!
-
-:: Debug Download URL
-if %DEBUG%==1 echo [DEBUG] Download URL: !DOWNLOAD_URL!
-
-:: Validate Download URL
-if "!DOWNLOAD_URL!"=="" (
-    call :error Failed to extract download URL.
+:: Check if Download URL is valid
+if "%DOWNLOAD_URL%"=="" (
+    echo [ERROR] Failed to retrieve download URL from the API response.
+    echo [DEBUG] API Response:
+    type api_response.json
+    del api_response.json
+    exit /b
 )
 
 :: Download ZIP File
 set ZIP_FILE=%TEMP%\%RESOURCE_NAME%.zip
-call :info Downloading ZIP file...
-curl -L -o "!ZIP_FILE!" "!DOWNLOAD_URL!"
-if not exist "!ZIP_FILE!" (
-    call :error Failed to download the ZIP file.
+echo [INFO] Downloading ZIP file...
+curl -L -o "%ZIP_FILE%" "%DOWNLOAD_URL%"
+if not exist "%ZIP_FILE%" (
+    echo [ERROR] Failed to download the ZIP file.
+    exit /b
 )
-call :info Download complete.
+echo [INFO] Download complete.
 
 :: Extract ZIP File
-call :info Extracting ZIP file...
-powershell -Command "Expand-Archive -Force '!ZIP_FILE!' '!TARGET_DIR!'"
+echo [INFO] Extracting ZIP file...
+powershell -Command "Expand-Archive -Force '%ZIP_FILE%' '%TARGET_DIR%'"
 if %errorlevel% neq 0 (
-    call :error Failed to extract the ZIP file.
+    echo [ERROR] Failed to extract the ZIP file.
+    exit /b
 )
-call :info Extraction complete.
+echo [INFO] Extraction complete.
 
 :: Cleanup
-del "!ZIP_FILE!"
-call :info Installation completed successfully!
+del "%ZIP_FILE%"
+del "api_response.json"
+echo [INFO] Installation completed successfully!
 
 endlocal
+exit /b 0
